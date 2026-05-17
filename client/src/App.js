@@ -49,7 +49,7 @@ function AISummary({ transcript, meetingTitle, duration, onClose }) {
 
   useEffect(function() {
     generateSummary();
-  }, []);
+  }, [transcript, meetingTitle, duration]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function generateSummary() {
     setLoading(true);
@@ -217,7 +217,7 @@ function MeetingRoom({ meetingId, meetingTitle, name, onLeave }) {
     return function() {
       if (socketRef.current) socketRef.current.disconnect();
     };
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(function() {
     if (chatBottom.current) {
