@@ -256,14 +256,52 @@ function MeetingRoom({ meetingId, meetingTitle, name, onLeave }) {
     });
   }
 
+  const LANGUAGES = [
+    { code: "en", name: "English" },
+    { code: "hi", name: "Hindi" },
+    { code: "ta", name: "Tamil" },
+    { code: "te", name: "Telugu" },
+    { code: "ml", name: "Malayalam" },
+    { code: "kn", name: "Kannada" },
+    { code: "fr", name: "French" },
+    { code: "de", name: "German" },
+    { code: "es", name: "Spanish" },
+    { code: "zh", name: "Chinese" },
+    { code: "ja", name: "Japanese" },
+    { code: "ar", name: "Arabic" },
+  ];
+
+  async function translateMessage(text) {
+    if (targetLang === "en") return text;
+    setTranslating(true);
+    try {
+      const res = await fetch(API + "/translate", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ text: text, targetLang: targetLang }),
+      });
+      const data = await res.json();
+      setTranslating(false);
+      return data.translated || text;
+    } catch (err) {
+      setTranslating(false);
+      return text;
+    }
+  }
+
   function sendMessage() {
     if (!msgInput.trim() || !socketRef.current) return;
-    socketRef.current.emit("chat-message", {
-      roomId:  meetingId,
-      message: msgInput.trim(),
-      sender:  name,
-    });
+    const originalMsg = msgInput.trim();
     setMsgInput("");
+    translateMessage(originalMsg).then(function(translated) {
+      socketRef.current.emit("chat-message", {
+        roomId:  meetingId,
+        message: targetLang !== "en"
+          ? originalMsg + " [" + translated + "]"
+          : originalMsg,
+        sender:  name,
+      });
+    });
   }
 
   function handleLeave() {
@@ -381,15 +419,36 @@ function MeetingRoom({ meetingId, meetingTitle, name, onLeave }) {
               })}
               <div ref={chatBottom} />
             </div>
+            <div style={{ padding: "0 10px 6px 10px" }}>
+              <select
+                value={targetLang}
+                onChange={function(e) { setTargetLang(e.target.value); }}
+                style={{
+                  width: "100%", padding: "6px 10px", borderRadius: "7px",
+                  border: "1px solid #2e2e33", background: "#0a0a0c",
+                  color: "#aaa", fontSize: "0.78rem", outline: "none",
+                }}
+              >
+                {LANGUAGES.map(function(l) {
+                  return (
+                    <option key={l.code} value={l.code}>
+                      Translate to: {l.name}
+                    </option>
+                  );
+                })}
+              </select>
+            </div>
             <div style={s.chatInputRow}>
               <input
                 style={s.chatField}
-                placeholder="Type a message..."
+                placeholder={translating ? "Translating..." : "Type a message..."}
                 value={msgInput}
                 onChange={function(e) { setMsgInput(e.target.value); }}
                 onKeyDown={function(e) { if (e.key === "Enter") sendMessage(); }}
               />
-              <button style={s.sendBtn} onClick={sendMessage}>Send</button>
+              <button style={s.sendBtn} onClick={sendMessage}>
+                {translating ? "..." : "Send"}
+              </button>
             </div>
           </div>
         )}
@@ -812,4 +871,4 @@ const s = {
     background: "#5046e5", color: "#fff", cursor: "pointer", fontWeight: "600", fontSize: "0.9rem",
   },
   noTranscript: { padding: "48px", textAlign: "center", color: "#aaa" },
-};
+};s

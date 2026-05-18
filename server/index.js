@@ -164,6 +164,34 @@ app.post("/ai/summary", async function(req, res) {
   }
 });
 
+
+// ── TRANSLATION ───────────────────────────────────────────────────────────────
+app.post("/translate", async function(req, res) {
+  try {
+    const { text, targetLang } = req.body;
+    if (!text || !targetLang) {
+      return res.status(400).json({ error: "text and targetLang required" });
+    }
+
+    const response = await fetch(
+      "https://api.mymemory.translated.net/get?q=" +
+      encodeURIComponent(text) + "&langpair=en|" + targetLang
+    );
+
+    const data = await response.json();
+
+    if (data.responseStatus !== 200) {
+      return res.status(500).json({ error: "Translation failed" });
+    }
+
+    const translated = data.responseData.translationText;
+    res.json({ translated: translated });
+
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── SOCKET (chat) ─────────────────────────────────────────────────────────────
 io.on("connection", function(socket) {
   console.log("Socket connected:", socket.id);
