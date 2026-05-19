@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { io } from "socket.io-client";
 import {
   LiveKitRoom,
   RoomAudioRenderer,
@@ -240,19 +241,15 @@ function MeetingRoom({ meetingId, meetingTitle, name, onLeave }) {
   }
 
   function connectSocket() {
-    // Dynamic import to avoid issues
-    import("socket.io-client").then(function(module) {
-      const io   = module.io;
-      const sock = io(API);
-      socketRef.current = sock;
+    const sock = io(API);
+    socketRef.current = sock;
 
-      sock.on("connect", function() {
-        sock.emit("join-chat", { roomId: meetingId, name: name });
-      });
+    sock.on("connect", function() {
+      sock.emit("join-chat", { roomId: meetingId, name: name });
+    });
 
-      sock.on("chat-message", function(msg) {
-        setMessages(function(prev) { return [...prev, msg]; });
-      });
+    sock.on("chat-message", function(msg) {
+      setMessages(function(prev) { return [...prev, msg]; });
     });
   }
 
@@ -871,4 +868,4 @@ const s = {
     background: "#5046e5", color: "#fff", cursor: "pointer", fontWeight: "600", fontSize: "0.9rem",
   },
   noTranscript: { padding: "48px", textAlign: "center", color: "#aaa" },
-};s
+};
