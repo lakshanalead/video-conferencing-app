@@ -201,26 +201,38 @@ app.post("/translate", async function(req, res) {
       return res.status(400).json({ error: "text and targetLang required" });
     }
 
-    const url = "https://api.mymemory.translated.net/get?q=" +
-      encodeURIComponent(text) + "&langpair=en|" + targetLang;
+    // Use LibreTranslate free public API
+    const response = await fetch("https://libretranslate.com/translate", {
+      method:  "POST",
+      headers: { "Content-Type": "application/json" },
+      body:    JSON.stringify({
+        q:      text,
+        source: "en",
+        target: targetLang,
+        format: "text",
+      }),
+    });
 
-    const response = await fetch(url);
-    const data     = await response.json();
-
+    const data = await response.json();
     console.log("Translation response:", JSON.stringify(data).slice(0, 300));
 
-    if (!data.responseData || !data.responseData.translationText) {
-      return res.status(500).json({ error: "Translation failed" });
+    if (data.translatedText) {
+      return res.json({ translated: data.translatedText });
     }
 
-    const translated = data.responseData.translationText;
+    // Fallback to MyMemory if LibreTranslate fails
+    const fallback = await fetch(
+      "https://api.mymemory.translated.net/get?q=" +
+      encodeURIComponent(text) + "&langpair=en|" + targetLang
+    );
+    const fbData = await fallback.json();
 
-    // If translation is same as input, it failed silently
-    if (translated.toLowerCase() === text.toLowerCase()) {
-      return res.json({ translated: "⚠️ Translation unavailable for this language" });
+    if (fbData.responseData && fbData.responseData.translationText &&
+        fbData.responseData.translationText.toLowerCase() !== text.toLowerCase()) {
+      return res.json({ translated: fbData.responseData.translationText });
     }
 
-    res.json({ translated: translated });
+    res.json({ translated: text });
 
   } catch (err) {
     res.status(500).json({ error: err.message });
