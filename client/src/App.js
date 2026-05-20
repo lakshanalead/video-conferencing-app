@@ -206,7 +206,7 @@ function MeetingRoom({ meetingId, meetingTitle, name, onLeave }) {
   }
 
   async function translateMessage(text) {
-    if (targetLang === "en") return text;
+    if (targetLang === "en") return null;
     setTranslating(true);
     try {
       const res  = await fetch(API + "/translate", {
@@ -216,19 +216,36 @@ function MeetingRoom({ meetingId, meetingTitle, name, onLeave }) {
       });
       const data = await res.json();
       setTranslating(false);
-      return data.translated || text;
-    } catch (err) { setTranslating(false); return text; }
+      console.log("Translation result:", data);
+      if (data.translated && data.translated !== text) {
+        return data.translated;
+      }
+      return null;
+    } catch (err) {
+      console.error("Translation error:", err);
+      setTranslating(false);
+      return null;
+    }
   }
 
   function sendMessage() {
     if (!msgInput.trim() || !socketRef.current) return;
     const original = msgInput.trim();
     setMsgInput("");
+
+    if (targetLang === "en") {
+      socketRef.current.emit("chat-message", {
+        roomId:  meetingId,
+        message: original,
+        sender:  name,
+      });
+      return;
+    }
+
     translateMessage(original).then(function(translated) {
-      var finalMessage = original;
-      if (targetLang !== "en" && translated !== original && !translated.includes("unavailable")) {
-        finalMessage = original + "\n🌐 " + translated;
-      }
+      var finalMessage = translated
+        ? original + "\n🌐 " + translated
+        : original;
       socketRef.current.emit("chat-message", {
         roomId:  meetingId,
         message: finalMessage,
@@ -393,7 +410,7 @@ function MeetingRoom({ meetingId, meetingTitle, name, onLeave }) {
               </select>
             </div>
 
-            <div style={{ display: "flex", gap: "8px", padding:"10px 14px 14px" }}>
+            <div style={{ display: "flex", gap: "8px", padding: "10px 14px 14px" }}>
               <input
                 style={{ flex: 1, padding: "10px 14px", borderRadius: "10px", border: "1px solid #252530", background: "#1a1a22", color: "#fff", fontSize: "0.87rem", outline: "none" }}
                 placeholder={translating ? "Translating..." : "Type a message..."}

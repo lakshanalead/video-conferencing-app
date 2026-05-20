@@ -201,40 +201,49 @@ app.post("/translate", async function(req, res) {
       return res.status(400).json({ error: "text and targetLang required" });
     }
 
-    // Use LibreTranslate free public API
-    const response = await fetch("https://libretranslate.com/translate", {
-      method:  "POST",
-      headers: { "Content-Type": "application/json" },
-      body:    JSON.stringify({
-        q:      text,
-        source: "en",
-        target: targetLang,
-        format: "text",
-      }),
-    });
+    console.log("Translating:", text, "to", targetLang);
 
-    const data = await response.json();
-    console.log("Translation response:", JSON.stringify(data).slice(0, 300));
+    // Primary: MyMemory API - most reliable free option
+    const myMemoryUrl = "https://api.mymemory.translated.net/get?q=" +
+      encodeURIComponent(text) + "&langpair=en|" + targetLang +
+      "&de=videomeet@gmail.com";
 
-    if (data.translatedText) {
-      return res.json({ translated: data.translatedText });
+    const response = await fetch(myMemoryUrl);
+    const data     = await response.json();
+
+    console.log("MyMemory status:", data.responseStatus);
+    console.log("MyMemory result:", data.responseData && data.responseData.translationText);
+
+    if (
+      data.responseStatus === 200 &&
+      data.responseData &&
+      data.responseData.translationText &&
+      data.responseData.translationText.toLowerCase().trim() !== text.toLowerCase().trim()
+    ) {
+      return res.json({ translated: data.responseData.translationText });
     }
 
-    // Fallback to MyMemory if LibreTranslate fails
-    const fallback = await fetch(
-      "https://api.mymemory.translated.net/get?q=" +
-      encodeURIComponent(text) + "&langpair=en|" + targetLang
-    );
-    const fbData = await fallback.json();
+    // Secondary: try MyMemory with different format
+    const myMemoryUrl2 = "https://api.mymemory.translated.net/get?q=" +
+      encodeURIComponent(text) + "&langpair=en-US|" + targetLang;
 
-    if (fbData.responseData && fbData.responseData.translationText &&
-        fbData.responseData.translationText.toLowerCase() !== text.toLowerCase()) {
-      return res.json({ translated: fbData.responseData.translationText });
+    const response2 = await fetch(myMemoryUrl2);
+    const data2     = await response2.json();
+
+    if (
+      data2.responseStatus === 200 &&
+      data2.responseData &&
+      data2.responseData.translationText &&
+      data2.responseData.translationText.toLowerCase().trim() !== text.toLowerCase().trim()
+    ) {
+      return res.json({ translated: data2.responseData.translationText });
     }
 
-    res.json({ translated: text });
+    // If both fail return error so client knows
+    return res.status(500).json({ error: "Translation failed for language: " + targetLang });
 
   } catch (err) {
+    console.error("Translation error:", err);
     res.status(500).json({ error: err.message });
   }
 });
