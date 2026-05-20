@@ -162,9 +162,28 @@ app.post("/ai/summary", async function(req, res) {
     );
 
     const aiData = await response.json();
-    const text = aiData.candidates[0].content.parts[0].text;
+    console.log("Gemini response:", JSON.stringify(aiData).slice(0, 500));
+
+    if (!aiData.candidates || !aiData.candidates[0]) {
+      return res.status(500).json({ error: "Gemini API error: " + JSON.stringify(aiData) });
+    }
+
+    const text    = aiData.candidates[0].content.parts[0].text;
     const cleaned = text.replace(/```json|```/g, "").trim();
-    const summary = JSON.parse(cleaned);
+
+    let summary;
+    try {
+      summary = JSON.parse(cleaned);
+    } catch (parseErr) {
+      // If JSON parse fails, create a basic summary from the text
+      summary = {
+        overview:    text.slice(0, 300),
+        keyPoints:   ["See full response above"],
+        decisions:   [],
+        actionItems: [],
+        sentiment:   "Informational",
+      };
+    }
     res.json({ summary: summary });
 
   } catch (err) {
@@ -182,18 +201,25 @@ app.post("/translate", async function(req, res) {
       return res.status(400).json({ error: "text and targetLang required" });
     }
 
-    const response = await fetch(
-      "https://api.mymemory.translated.net/get?q=" +
-      encodeURIComponent(text) + "&langpair=en|" + targetLang
-    );
+    const url = "https://api.mymemory.translated.net/get?q=" +
+      encodeURIComponent(text) + "&langpair=en|" + targetLang;
 
-    const data = await response.json();
+    const response = await fetch(url);
+    const data     = await response.json();
 
-    if (data.responseStatus !== 200) {
+    console.log("Translation response:", JSON.stringify(data).slice(0, 300));
+
+    if (!data.responseData || !data.responseData.translationText) {
       return res.status(500).json({ error: "Translation failed" });
     }
 
     const translated = data.responseData.translationText;
+
+    // If translation is same as input, it failed silently
+    if (translated.toLowerCase() === text.toLowerCase()) {
+      return res.json({ translated: "⚠️ Translation unavailable for this language" });
+    }
+
     res.json({ translated: translated });
 
   } catch (err) {

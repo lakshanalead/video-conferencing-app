@@ -225,9 +225,13 @@ function MeetingRoom({ meetingId, meetingTitle, name, onLeave }) {
     const original = msgInput.trim();
     setMsgInput("");
     translateMessage(original).then(function(translated) {
+      var finalMessage = original;
+      if (targetLang !== "en" && translated !== original && !translated.includes("unavailable")) {
+        finalMessage = original + "\n🌐 " + translated;
+      }
       socketRef.current.emit("chat-message", {
         roomId:  meetingId,
-        message: targetLang !== "en" ? original + " [" + translated + "]" : original,
+        message: finalMessage,
         sender:  name,
       });
     });
@@ -295,7 +299,46 @@ function MeetingRoom({ meetingId, meetingTitle, name, onLeave }) {
       </div>
 
       <div style={{ flex: 1, display: "flex", overflow: "hidden" }}>
-        <div style={{ flex: 1, overflow: "hidden" }}>
+        <div style={{ flex: 1, overflow: "hidden", display: "flex", flexDirection: "column" }}>
+          <style>{`
+            .lk-control-bar {
+              background: #1a1a2e !important;
+              border-top: 1px solid #2a2a4a !important;
+              padding: 12px 20px !important;
+            }
+            .lk-button {
+              background: #2a2a4a !important;
+              color: #ffffff !important;
+              border: 1px solid #3a3a5a !important;
+              border-radius: 10px !important;
+              font-weight: 700 !important;
+              min-width: 80px !important;
+              padding: 10px 16px !important;
+            }
+            .lk-button:hover {
+              background: #6366f1 !important;
+              border-color: #6366f1 !important;
+            }
+            .lk-button[aria-pressed="true"],
+            .lk-button[data-lk-active="true"] {
+              background: #dc2626 !important;
+              border-color: #dc2626 !important;
+            }
+            .lk-button svg {
+              color: #ffffff !important;
+              fill: #ffffff !important;
+            }
+            .lk-button span {
+              color: #ffffff !important;
+              font-size: 0.78rem !important;
+            }
+            .lk-participant-name {
+              color: #ffffff !important;
+              background: rgba(0,0,0,0.7) !important;
+              padding: 3px 8px !important;
+              border-radius: 6px !important;
+            }
+          `}</style>
           <LiveKitRoom
             token={token}
             serverUrl={LIVEKIT_URL}
@@ -303,7 +346,7 @@ function MeetingRoom({ meetingId, meetingTitle, name, onLeave }) {
             video={true}
             audio={true}
             onDisconnected={handleLeave}
-            style={{ height: "100%" }}
+            style={{ height: "100%", flex: 1 }}
           >
             <VideoGrid />
             <RoomAudioRenderer />
@@ -350,7 +393,7 @@ function MeetingRoom({ meetingId, meetingTitle, name, onLeave }) {
               </select>
             </div>
 
-            <div style={{ display: "flex", gap: "8px", padding: "10px 14px 14px" }}>
+            <div style={{ display: "flex", gap: "8px", padding:"10px 14px 14px" }}>
               <input
                 style={{ flex: 1, padding: "10px 14px", borderRadius: "10px", border: "1px solid #252530", background: "#1a1a22", color: "#fff", fontSize: "0.87rem", outline: "none" }}
                 placeholder={translating ? "Translating..." : "Type a message..."}
@@ -387,7 +430,7 @@ function AuthScreen({ onAuth }) {
     setError("");
     setLoading(true);
     try {
-      const body = mode ==="signup" ? { name, email, password } : { email, password };
+      const body = mode === "signup" ? { name, email, password } : { email, password };
       const res  = await fetch(API + "/auth/" + mode, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
       const data = await res.json();
       if (data.error) { setError(data.error); setLoading(false); return; }
