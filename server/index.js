@@ -13,12 +13,21 @@ const User    = require("./models/User");
 const Meeting = require("./models/Meeting");
 
 const app = express();
-app.use(cors());
+app.use(cors({
+  origin: "*",
+  methods: ["GET", "POST"],
+  credentials: false,
+}));
 app.use(express.json());
 
 const server = http.createServer(app);
 const io = new Server(server, {
-  cors: { origin: "*", methods: ["GET", "POST"] },
+  cors: {
+    origin: "*",
+    methods: ["GET", "POST"],
+    credentials: false,
+  },
+  transports: ["websocket", "polling"],
 });
 
 // ── MongoDB ───────────────────────────────────────────────────────────────────
