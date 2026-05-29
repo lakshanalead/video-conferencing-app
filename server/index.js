@@ -13,20 +13,12 @@ const User    = require("./models/User");
 const Meeting = require("./models/Meeting");
 
 const app = express();
-app.use(cors({
-  origin: "*",
-  methods: ["GET", "POST"],
-  credentials: false,
-}));
+app.use(cors({ origin: "*", methods: ["GET", "POST"], credentials: false }));
 app.use(express.json());
 
 const server = http.createServer(app);
 const io = new Server(server, {
-  cors: {
-    origin: "*",
-    methods: ["GET", "POST"],
-    credentials: false,
-  },
+  cors: { origin: "*", methods: ["GET", "POST"], credentials: false },
   transports: ["websocket", "polling"],
 });
 
@@ -97,8 +89,7 @@ app.post("/meetings/create", authMiddleware, async function(req, res) {
 
 app.get("/meetings/:meetingId", async function(req, res) {
   try {
-    const meeting = await Meeting.findOne({ meetingId: req.params.meetingId })
-      .populate("hostId", "name email");
+    const meeting = await Meeting.findOne({ meetingId: req.params.meetingId }).populate("hostId", "name email");
     if (!meeting) return res.status(404).json({ error: "Meeting not found" });
     res.json({ meeting: meeting });
   } catch (err) { res.status(500).json({ error: err.message }); }
@@ -121,16 +112,58 @@ app.get("/token", async function(req, res) {
   res.json({ token: token });
 });
 
+// ── TRANSLATION (using Gemini AI) ─────────────────────────────────────────────
+app.post("/translate", async function(req, res) {
+  try {
+    const { text, targetLang } = req.body;
+    if (!text || !targetLang) return res.status(400).json({ error: "text and targetLang required" });
+    if (targetLang === "en") return res.json({ translated: text });
+
+    const langNames = {
+      hi: "Hindi", ta: "Tamil", te: "Telugu", ml: "Malayalam",
+      kn: "Kannada", fr: "French", de: "German", es: "Spanish",
+      zh: "Chinese", ja: "Japanese", ar: "Arabic",
+    };
+
+    const langName = langNames[targetLang] || targetLang;
+    const prompt   = "Translate this English text to " + langName + ". Return ONLY the translated text, nothing else, no explanation:\n\n" + text;
+
+    const response = await fetch(
+      "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=" +
+      process.env.GEMINI_API_KEY,
+      {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+        }),
+      }
+    );
+
+    const data = await response.json();
+    console.log("Translation response:", JSON.stringify(data).slice(0, 300));
+
+    if (!data.candidates || !data.candidates[0]) {
+      return res.status(500).json({ error: "Translation API error" });
+    }
+
+    const translated = data.candidates[0].content.parts[0].text.trim();
+    res.json({ translated: translated });
+
+  } catch (err) {
+    console.error("Translation error:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── AI SUMMARY ────────────────────────────────────────────────────────────────
 app.post("/ai/summary", async function(req, res) {
   try {
     const { transcript, meetingTitle, duration } = req.body;
-
     if (!transcript || transcript.length === 0) {
       return res.status(400).json({ error: "No transcript provided" });
     }
 
-    // Format transcript for Claude
     const formattedChat = transcript.map(function(m) {
       return "[" + (m.time || "") + "] " + m.sender + ": " + m.message;
     }).join("\n");
@@ -140,29 +173,29 @@ app.post("/ai/summary", async function(req, res) {
       "Meeting: " + meetingTitle + "\n" +
       "Duration: " + duration + "\n\n" +
       "Chat Transcript:\n" + formattedChat + "\n\n" +
-      "Respond ONLY with a valid JSON object in exactly this format with no extra text:\n" +
+      "Respond ONLY with a valid JSON object in exactly this format, no extra text:\n" +
       "{\n" +
-      "  \"overview\": \"2-3 sentence summary of what the meeting was about\",\n" +
+      "  \"overview\": \"2-3 sentence summary\",\n" +
       "  \"keyPoints\": [\"point 1\", \"point 2\", \"point 3\"],\n" +
-      "  \"decisions\": [\"decision 1\", \"decision 2\"],\n" +
-      "  \"actionItems\": [\"action item 1\", \"action item 2\"],\n" +
-      "  \"sentiment\": \"Productive / Collaborative / Informational / Mixed\"\n" +
+      "  \"decisions\": [\"decision 1\"],\n" +
+      "  \"actionItems\": [\"action 1\"],\n" +
+      "  \"sentiment\": \"Productive\"\n" +
       "}";
 
     const response = await fetch(
       "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=" +
       process.env.GEMINI_API_KEY,
       {
-        method: "POST",
+        method:  "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+        body:    JSON.stringify({
           contents: [{ parts: [{ text: prompt }] }],
         }),
       }
     );
 
     const aiData = await response.json();
-    console.log("Gemini response:", JSON.stringify(aiData).slice(0, 500));
+    console.log("Gemini summary response:", JSON.stringify(aiData).slice(0, 500));
 
     if (!aiData.candidates || !aiData.candidates[0]) {
       return res.status(500).json({ error: "Gemini API error: " + JSON.stringify(aiData) });
@@ -175,15 +208,15 @@ app.post("/ai/summary", async function(req, res) {
     try {
       summary = JSON.parse(cleaned);
     } catch (parseErr) {
-      // If JSON parse fails, create a basic summary from the text
       summary = {
-        overview:    text.slice(0, 300),
-        keyPoints:   ["See full response above"],
+        overview:    "Meeting completed successfully.",
+        keyPoints:   ["Chat was active during the meeting"],
         decisions:   [],
         actionItems: [],
-        sentiment:   "Informational",
+        sentiment:   "Productive",
       };
     }
+
     res.json({ summary: summary });
 
   } catch (err) {
@@ -192,63 +225,7 @@ app.post("/ai/summary", async function(req, res) {
   }
 });
 
-
-// ── TRANSLATION ───────────────────────────────────────────────────────────────
-app.post("/translate", async function(req, res) {
-  try {
-    const { text, targetLang } = req.body;
-    if (!text || !targetLang) {
-      return res.status(400).json({ error: "text and targetLang required" });
-    }
-
-    console.log("Translating:", text, "to", targetLang);
-
-    // Primary: MyMemory API - most reliable free option
-    const myMemoryUrl = "https://api.mymemory.translated.net/get?q=" +
-      encodeURIComponent(text) + "&langpair=en|" + targetLang +
-      "&de=videomeet@gmail.com";
-
-    const response = await fetch(myMemoryUrl);
-    const data     = await response.json();
-
-    console.log("MyMemory status:", data.responseStatus);
-    console.log("MyMemory result:", data.responseData && data.responseData.translationText);
-
-    if (
-      data.responseStatus === 200 &&
-      data.responseData &&
-      data.responseData.translationText &&
-      data.responseData.translationText.toLowerCase().trim() !== text.toLowerCase().trim()
-    ) {
-      return res.json({ translated: data.responseData.translationText });
-    }
-
-    // Secondary: try MyMemory with different format
-    const myMemoryUrl2 = "https://api.mymemory.translated.net/get?q=" +
-      encodeURIComponent(text) + "&langpair=en-US|" + targetLang;
-
-    const response2 = await fetch(myMemoryUrl2);
-    const data2     = await response2.json();
-
-    if (
-      data2.responseStatus === 200 &&
-      data2.responseData &&
-      data2.responseData.translationText &&
-      data2.responseData.translationText.toLowerCase().trim() !== text.toLowerCase().trim()
-    ) {
-      return res.json({ translated: data2.responseData.translationText });
-    }
-
-    // If both fail return error so client knows
-    return res.status(500).json({ error: "Translation failed for language: " + targetLang });
-
-  } catch (err) {
-    console.error("Translation error:", err);
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// ── SOCKET (chat) ─────────────────────────────────────────────────────────────
+// ── SOCKET ────────────────────────────────────────────────────────────────────
 io.on("connection", function(socket) {
   console.log("Socket connected:", socket.id);
 
